@@ -1,2 +1,3 @@
 # rws
-A web server written in Rust.
+
+Rust Web Server, a web server written in Rust.
