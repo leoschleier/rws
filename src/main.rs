@@ -1,3 +1,4 @@
+//! Multithreaded webserver.
 use rws::ThreadPool;
 use std::{
     fs,
@@ -7,6 +8,7 @@ use std::{
     time::Duration,
 };
 
+/// Entry point for running the multithreaded webserver.
 fn main() {
     let listener = TcpListener::bind("127.0.0.1:7878").unwrap();
     let pool = ThreadPool::new(4);
@@ -18,6 +20,9 @@ fn main() {
     }
 }
 
+/// Handle HTTP requests coming in over a `TCPStream`.
+///
+/// On each request, we serve static content in form of html.
 fn handle_connection(mut stream: TcpStream) {
     let buf_reader = BufReader::new(&stream);
     let request_line = buf_reader.lines().next().unwrap().unwrap();

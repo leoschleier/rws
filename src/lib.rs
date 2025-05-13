@@ -1,8 +1,17 @@
+//! Multithreaded web server lib.
 use std::{
     sync::{Arc, Mutex, mpsc},
     thread,
 };
 
+/// An orchastrator of worker threads sending jobs to the workers.
+///
+/// # Examples
+///
+/// ```
+/// pool = ThreadPool(4);
+/// pool.execute(|| println!(Printing this in a thread"))
+/// ```
 pub struct ThreadPool {
     workers: Vec<Worker>,
     sender: Option<mpsc::Sender<Job>>,
@@ -11,6 +20,7 @@ pub struct ThreadPool {
 type Job = Box<dyn FnOnce() + Send + 'static>;
 
 impl ThreadPool {
+    /// Create a new `ThreadPool` with a number of `size` (>0) worker threads.
     pub fn new(size: usize) -> ThreadPool {
         assert!(size > 0);
 
@@ -30,6 +40,9 @@ impl ThreadPool {
         }
     }
 
+    /// Send function `f` as a job to the worker threads.
+    ///
+    /// The job will be executed by the first available worker.
     pub fn execute<F>(&self, f: F)
     where
         F: FnOnce() + Send + 'static,
@@ -41,6 +54,10 @@ impl ThreadPool {
 }
 
 impl Drop for ThreadPool {
+    /// Drop the `ThreadPool`.
+    ///
+    /// When dropping the `ThreadPool`, we will wait for all worker threads to
+    /// finish execution.
     fn drop(&mut self) {
         drop(self.sender.take());
 
@@ -52,12 +69,19 @@ impl Drop for ThreadPool {
     }
 }
 
+/// Wrapper around a `thread`.
 struct Worker {
     id: usize,
     thread: thread::JoinHandle<()>,
 }
 
 impl Worker {
+    /// Create a new worker.
+    ///
+    /// # Arguments
+    ///
+    /// * `id` - Unique identifier of the worker
+    /// * `receiver` - Receiver via which the worker receives new jobs
     pub fn new(id: usize, receiver: Arc<Mutex<mpsc::Receiver<Job>>>) -> Worker {
         let thread = thread::spawn(move || {
             loop {
