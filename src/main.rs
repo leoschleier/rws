@@ -1,7 +1,8 @@
 //! Multithreaded webserver.
+use dotenv::dotenv;
 use rws::ThreadPool;
 use std::{
-    fs,
+    env, fs,
     io::{BufReader, prelude::*},
     net::{TcpListener, TcpStream},
     thread,
@@ -10,7 +11,15 @@ use std::{
 
 /// Entry point for running the multithreaded webserver.
 fn main() {
-    let listener = TcpListener::bind("127.0.0.1:7878").unwrap();
+    dotenv().ok();
+
+    let address = env::var("RWS_ADDRESS").unwrap();
+    let port = env::var("RWS_PORT").unwrap();
+
+    let address_port = format!("{}:{}", address, port);
+    println!("Listening to {}", address_port);
+
+    let listener = TcpListener::bind(address_port).unwrap();
     let pool = ThreadPool::new(4);
 
     // Iterate over connection attempts
