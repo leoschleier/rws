@@ -9,6 +9,9 @@ use std::{
     time::Duration,
 };
 
+const HELLO_HTML: &str = "html/hello.html";
+const NOT_FOUND_HTML: &str = "html/404.html";
+
 /// Entry point for running the multithreaded webserver.
 fn main() {
     dotenv().ok();
@@ -37,12 +40,12 @@ fn handle_connection(mut stream: TcpStream) {
     let request_line = buf_reader.lines().next().unwrap().unwrap();
 
     let (status_line, filename) = match &request_line[..] {
-        "GET / HTTP/1.1" => ("HTTP/1.1 200 OK", "hello.html"),
+        "GET / HTTP/1.1" => ("HTTP/1.1 200 OK", HELLO_HTML),
         "GET /sleep HTTP/1.1" => {
             thread::sleep(Duration::from_secs(5));
-            ("HTTP/1.1 200 OK", "hello.html")
+            ("HTTP/1.1 200 OK", HELLO_HTML)
         }
-        _ => ("HTTP/1.1 404 NOT FOUND", "404.html"),
+        _ => ("HTTP/1.1 404 NOT FOUND", NOT_FOUND_HTML),
     };
 
     let contents = fs::read_to_string(filename).unwrap();
