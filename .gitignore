@@ -22,3 +22,6 @@ target/
 
 # Environment variables for development
 .env
+
+# SSH keys
+.ssh/

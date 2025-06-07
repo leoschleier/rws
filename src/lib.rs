@@ -48,8 +48,11 @@ impl ThreadPool {
         F: FnOnce() + Send + 'static,
     {
         let job = Box::new(f);
-
-        self.sender.as_ref().unwrap().send(job).unwrap();
+        self.sender
+            .as_ref()
+            .expect("ThreadPool has been shut down")
+            .send(job)
+            .expect("Failed to send job to worker thread");
     }
 }
 
@@ -63,8 +66,10 @@ impl Drop for ThreadPool {
 
         for worker in self.workers.drain(..) {
             println!("Shutting down worker {}", worker.id);
-
-            worker.thread.join().unwrap();
+            worker
+                .thread
+                .join()
+                .expect("Worker {worker.id} failed to join");
         }
     }
 }
