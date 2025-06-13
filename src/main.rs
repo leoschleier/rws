@@ -5,12 +5,11 @@ use std::{
     env, fs,
     io::{BufReader, prelude::*},
     net::{TcpListener, TcpStream},
-    thread,
-    time::Duration,
 };
+use regex::Regex;
 
-const HELLO_HTML: &str = "html/hello.html";
-const NOT_FOUND_HTML: &str = "html/404.html";
+const ROOT_HTML: &str = "./html/root.html";
+const ERROR_404_NOT_FOUND_HTML: &str = "./html/error/404.html";
 
 /// Entry point for running the multithreaded webserver.
 fn main() {
@@ -64,20 +63,41 @@ fn handle_connection(mut stream: TcpStream) {
         }
     };
 
-    let (status_line, filename) = match &request_line[..] {
-        "GET / HTTP/1.1" => ("HTTP/1.1 200 OK", HELLO_HTML),
-        "GET /sleep HTTP/1.1" => {
-            thread::sleep(Duration::from_secs(5));
-            ("HTTP/1.1 200 OK", HELLO_HTML)
+    let re = Regex::new(r"^(GET) (.+) (HTTP/1\.1)$").unwrap();
+
+    let captures = re.captures(&request_line);    
+
+    let request_line_captures = match captures {
+        Some(c) => c,
+        None => {
+            eprintln!("Invalid request line: {request_line}");
+            return;
         }
-        _ => ("HTTP/1.1 404 NOT FOUND", NOT_FOUND_HTML),
     };
 
-    let contents = fs::read_to_string(filename).unwrap_or("".to_string());
-    let length = contents.len();
+
+    let request_uri = request_line_captures.get(2).unwrap().as_str();
+
+    println!("Request URI: {}", request_uri);
+
+    let filename = match request_uri {
+        "/" => ROOT_HTML.to_string(),
+        _ => format!("./html/{request_uri}.html"),
+    };
+
+    let (status_line, content) = match fs::read_to_string(&filename) {
+        Ok(content) => ("HTTP/1.1 200 OK", content),
+        Err(e) => {
+            eprintln!("Error occurred when reading file {}: {}", filename, e);
+            ("HTTP/1.1 404 NOT FOUND", fs::read_to_string(ERROR_404_NOT_FOUND_HTML).unwrap_or("".to_string()))
+        },
+   
+    };
+
+    let content_length = content.len();
 
     let response =
-        format!("{status_line}\r\nContent-Length: {length}\r\n\r\n{contents}");
+        format!("{status_line}\r\nContent-Length: {content_length}\r\n\r\n{content}");
 
     match stream.write_all(response.as_bytes()) {
         Ok(_) => (),

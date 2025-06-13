@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Leo Schleier | Home</title>
+  <style>
+    body {
+      background-color: black;
+      color: #33ff33;
+      font-family: 'Courier New', Courier, monospace;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+    }
+
+    .terminal {
+      max-width: 800px;
+      padding: 2rem;
+      background-color: #000;
+      border: 1px solid #33ff33;
+      box-shadow: 0 0 10px #33ff33;
+    }
+
+    .prompt {
+      display: flex;
+      align-items: center;
+    }
+
+    .prompt span::after {
+      content: '';
+      display: inline-block;
+      width: 10px;
+      height: 20px;
+      background-color: #33ff33;
+      margin-left: 5px;
+      animation: blink 1s step-start infinite;
+    }
+
+    @keyframes blink {
+      50% { opacity: 0; }
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 1.5rem;
+    }
+
+    .intro {
+      margin-top: 1rem;
+      white-space: pre-wrap;
+    }
+  </style>
+</head>
+<body>
+  <div class="terminal">
+    <div class="prompt">
+      <h1>&gt; Hello, I'm Leo Schleier<span></span></h1>
+    </div>
+    <div class="intro">
+      Welcome to my terminal-style website.
+
+      I am a software engineer who loves to build things.
+    </div>
+  </div>
+</body>
+</html>
