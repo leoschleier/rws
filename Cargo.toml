@@ -5,3 +5,4 @@ edition = "2024"
 
 [dependencies]
 dotenv = "0.15.0"
+regex = "1.11.1"
