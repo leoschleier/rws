@@ -1,12 +1,12 @@
 //! Multithreaded webserver.
 use dotenv::dotenv;
+use regex::Regex;
 use rws::ThreadPool;
 use std::{
     env, fs,
     io::{BufReader, prelude::*},
     net::{TcpListener, TcpStream},
 };
-use regex::Regex;
 
 const ROOT_HTML: &str = "root.html";
 const ERROR_404_NOT_FOUND_HTML: &str = "error/404.html";
@@ -71,7 +71,7 @@ fn handle_connection(mut stream: TcpStream, root: String) {
 
     let re = Regex::new(r"^(GET) (.+) (HTTP/1\.1)$").unwrap();
 
-    let captures = re.captures(&request_line);    
+    let captures = re.captures(&request_line);
 
     let request_line_captures = match captures {
         Some(c) => c,
@@ -80,7 +80,6 @@ fn handle_connection(mut stream: TcpStream, root: String) {
             return;
         }
     };
-
 
     let request_uri = request_line_captures.get(2).unwrap().as_str();
 
@@ -96,19 +95,21 @@ fn handle_connection(mut stream: TcpStream, root: String) {
         Err(e) => {
             eprintln!("Error occurred when reading file {}: {}", filename, e);
             let f = format!("{root}/{ERROR_404_NOT_FOUND_HTML}");
-            ("HTTP/1.1 404 NOT FOUND", fs::read_to_string(f).unwrap_or("".to_string()))
-        },
-   
+            (
+                "HTTP/1.1 404 NOT FOUND",
+                fs::read_to_string(f).unwrap_or("".to_string()),
+            )
+        }
     };
 
     let content_length = content.len();
 
-    let response =
-        format!("{status_line}\r\nContent-Length: {content_length}\r\n\r\n{content}");
+    let response = format!(
+        "{status_line}\r\nContent-Length: {content_length}\r\n\r\n{content}"
+    );
 
     match stream.write_all(response.as_bytes()) {
         Ok(_) => (),
         Err(e) => eprintln!("Failed to send response: {e}"),
     }
 }
-
