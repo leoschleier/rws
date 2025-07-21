@@ -9,8 +9,9 @@ use std::{
 /// # Examples
 ///
 /// ```
-/// pool = ThreadPool(4);
-/// pool.execute(|| println!(Printing this in a thread"))
+/// use rws::ThreadPool;
+/// let pool = ThreadPool::new(4);
+/// pool.execute(|| println!("Printing this in a thread"));
 /// ```
 pub struct ThreadPool {
     workers: Vec<Worker>,
