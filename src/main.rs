@@ -85,9 +85,13 @@ fn handle_connection(mut stream: TcpStream, root: String) {
 
     println!("Request URI: {}", request_uri);
 
-    let filename = match request_uri {
-        "/" => format!("{root}/{ROOT_HTML}"),
-        _ => format!("{root}/{request_uri}.html"),
+    let filename = if string_ends_with(request_uri, &[".css"]) {
+        format!("{root}/{request_uri}")
+    } else {
+        match request_uri {
+            r"/" => format!("{root}/{ROOT_HTML}"),
+            _ => format!("{root}/{request_uri}.html"),
+        }
     };
 
     let (status_line, content) = match fs::read_to_string(&filename) {
@@ -113,3 +117,9 @@ fn handle_connection(mut stream: TcpStream, root: String) {
         Err(e) => eprintln!("Failed to send response: {e}"),
     }
 }
+
+/// Check if string ends with any of the given suffixes
+fn string_ends_with(s: &str, suffixes: &[&str]) -> bool {
+    suffixes.iter().any(|suffix| s.ends_with(suffix))
+}
+
