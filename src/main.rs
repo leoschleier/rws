@@ -85,31 +85,40 @@ fn handle_connection(mut stream: TcpStream, root: String) {
 
     println!("Request URI: {}", request_uri);
 
-    let filename = if string_ends_with(request_uri, &[".css"]) {
-        format!("{root}/{request_uri}")
+    let (filename, content_type) = if string_ends_with(request_uri, &[".css"]) {
+        let f = format!("{root}/{request_uri}");
+        (f, "text/css")
     } else {
-        match request_uri {
+        let f = match request_uri {
             r"/" => format!("{root}/{ROOT_HTML}"),
             _ => format!("{root}/{request_uri}.html"),
-        }
+        };
+        (f, "text/html")
     };
 
-    let (status_line, content) = match fs::read_to_string(&filename) {
-        Ok(content) => ("HTTP/1.1 200 OK", content),
-        Err(e) => {
-            eprintln!("Error occurred when reading file {}: {}", filename, e);
-            let f = format!("{root}/{ERROR_404_NOT_FOUND_HTML}");
-            (
-                "HTTP/1.1 404 NOT FOUND",
-                fs::read_to_string(f).unwrap_or("".to_string()),
-            )
-        }
-    };
+    let (status_line, content, content_type) =
+        match fs::read_to_string(&filename) {
+            Ok(content) => ("HTTP/1.1 200 OK", content, content_type),
+            Err(e) => {
+                eprintln!(
+                    "Error occurred when reading file {}: {}",
+                    filename, e
+                );
+                let f = format!("{root}/{ERROR_404_NOT_FOUND_HTML}");
+                (
+                    "HTTP/1.1 404 NOT FOUND",
+                    fs::read_to_string(f).unwrap_or("".to_string()),
+                    "text/html",
+                )
+            }
+        };
 
     let content_length = content.len();
-
     let response = format!(
-        "{status_line}\r\nContent-Length: {content_length}\r\n\r\n{content}"
+        "{status_line}\r\n\
+        Content-Type: {content_type}\r\n\
+        Content-Length: {content_length}\r\n\r\n\
+        {content}"
     );
 
     match stream.write_all(response.as_bytes()) {
@@ -122,4 +131,3 @@ fn handle_connection(mut stream: TcpStream, root: String) {
 fn string_ends_with(s: &str, suffixes: &[&str]) -> bool {
     suffixes.iter().any(|suffix| s.ends_with(suffix))
 }
-
