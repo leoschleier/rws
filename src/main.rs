@@ -22,6 +22,10 @@ fn main() {
 
     let root = env::var("RWS_ROOT").unwrap_or(".".to_string());
 
+    if !path::Path::new(&root).is_dir() {
+        panic!("RWS_ROOT must be a valid directory. Got: {}", root);
+    }
+
     println!("Serving static conent from {}", root);
 
     let address_port = format!("{}:{}", address, port);
@@ -139,13 +143,13 @@ enum StrOrBytes {
 
 fn load_content(file: &path::Path) -> Option<(Option<StrOrBytes>, String)> {
     match file.extension().and_then(|ext| ext.to_str()) {
-        Some("html") => Some((
+        Some(ext) if matches!(ext, "html" | "css") => Some((
             fs::read_to_string(file).ok().map(StrOrBytes::Str),
-            String::from("text/"),
+            format!("text/{ext}"),
         )),
-        Some("wasm") => Some((
+        Some(ext) if matches!(ext, "wasm") => Some((
             fs::read(file).ok().map(StrOrBytes::Bytes),
-            String::from("application/wasm"),
+            format!("application/{ext}"),
         )),
         _ => None,
     }
