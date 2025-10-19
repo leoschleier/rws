@@ -6,6 +6,7 @@ use std::{
     env, fs,
     io::{BufReader, prelude::*},
     net::{TcpListener, TcpStream},
+    path,
 };
 
 const ROOT_HTML: &str = "root.html";
@@ -20,6 +21,10 @@ fn main() {
     let port = env::var("RWS_PORT").unwrap_or("8080".to_string());
 
     let root = env::var("RWS_ROOT").unwrap_or(".".to_string());
+
+    if !path::Path::new(&root).is_dir() {
+        panic!("RWS_ROOT must be a valid directory. Got: {}", root);
+    }
 
     println!("Serving static conent from {}", root);
 
@@ -82,52 +87,94 @@ fn handle_connection(mut stream: TcpStream, root: String) {
     };
 
     let request_uri = request_line_captures.get(2).unwrap().as_str();
-
     println!("Request URI: {}", request_uri);
 
-    let (filename, content_type) = if string_ends_with(request_uri, &[".css"]) {
-        let f = format!("{root}/{request_uri}");
-        (f, "text/css")
-    } else {
-        let f = match request_uri {
-            r"/" => format!("{root}/{ROOT_HTML}"),
-            _ => format!("{root}/{request_uri}.html"),
-        };
-        (f, "text/html")
-    };
+    let uri_path = path::Path::new(request_uri);
+    let uri_resolved = resolve_uri(uri_path, &root);
+    let file = path::Path::new(&uri_resolved);
+    println!("Resolved uri: {:?}", file);
 
-    let (status_line, content, content_type) =
-        match fs::read_to_string(&filename) {
-            Ok(content) => ("HTTP/1.1 200 OK", content, content_type),
-            Err(e) => {
-                eprintln!(
-                    "Error occurred when reading file {}: {}",
-                    filename, e
-                );
-                let f = format!("{root}/{ERROR_404_NOT_FOUND_HTML}");
-                (
-                    "HTTP/1.1 404 NOT FOUND",
+    let maybe_content = load_content(file);
+
+    let (status_line, content_wrapper, content_type) =
+        if let Some((Some(c), ctype)) = maybe_content {
+            ("HTTP/1.1 200 OK", c, ctype)
+        } else {
+            println!("Error occurred when reading file {:?}", file);
+            let f = format!("{root}/{ERROR_404_NOT_FOUND_HTML}");
+            (
+                "HTTP/1.1 404 NOT FOUND",
+                StrOrBytes::Str(
                     fs::read_to_string(f).unwrap_or("".to_string()),
-                    "text/html",
-                )
-            }
+                ),
+                String::from("text/html"),
+            )
         };
 
-    let content_length = content.len();
-    let response = format!(
-        "{status_line}\r\n\
-        Content-Type: {content_type}\r\n\
-        Content-Length: {content_length}\r\n\r\n\
-        {content}"
-    );
+    match content_wrapper {
+        StrOrBytes::Bytes(b) => {
+            send_response(&mut stream, status_line, &content_type, &b)
+        }
+        StrOrBytes::Str(s) => {
+            send_response(&mut stream, status_line, &content_type, s.as_bytes())
+        }
+    };
+}
 
-    match stream.write_all(response.as_bytes()) {
-        Ok(_) => (),
-        Err(e) => eprintln!("Failed to send response: {e}"),
+fn resolve_uri(uri: &path::Path, root: &str) -> String {
+    let uri_str;
+    let mut extension = "";
+    if uri == path::Path::new("/") {
+        uri_str = ROOT_HTML;
+    } else if uri.extension().is_none() {
+        uri_str = uri.to_str().unwrap_or("");
+        extension = ".html";
+    } else {
+        uri_str = uri.to_str().unwrap_or("");
+    }
+
+    format!("{root}/{uri_str}{extension}")
+}
+
+enum StrOrBytes {
+    Str(String),
+    Bytes(Vec<u8>),
+}
+
+fn load_content(file: &path::Path) -> Option<(Option<StrOrBytes>, String)> {
+    match file.extension().and_then(|ext| ext.to_str()) {
+        Some(ext) if matches!(ext, "html" | "css") => Some((
+            fs::read_to_string(file).ok().map(StrOrBytes::Str),
+            format!("text/{ext}"),
+        )),
+        Some(ext) if matches!(ext, "wasm") => Some((
+            fs::read(file).ok().map(StrOrBytes::Bytes),
+            format!("application/{ext}"),
+        )),
+        _ => None,
     }
 }
 
-/// Check if string ends with any of the given suffixes
-fn string_ends_with(s: &str, suffixes: &[&str]) -> bool {
-    suffixes.iter().any(|suffix| s.ends_with(suffix))
+fn send_response(
+    stream: &mut TcpStream,
+    status_line: &str,
+    content_type: &str,
+    content: &[u8],
+) {
+    let content_length = content.len();
+    let header = format!(
+        "{status_line}\r\n\
+        Content-Type: {content_type}\r\n\
+        Content-Length: {content_length}\r\n\r\n"
+    );
+
+    match stream.write_all(header.as_bytes()) {
+        Ok(_) => (),
+        Err(e) => eprintln!("Failed to send header: {e}"),
+    }
+
+    match stream.write_all(content) {
+        Ok(_) => (),
+        Err(e) => eprintln!("Failed to send content: {e}"),
+    }
 }
