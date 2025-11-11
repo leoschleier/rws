@@ -143,7 +143,7 @@ enum StrOrBytes {
 
 fn load_content(file: &path::Path) -> Option<(Option<StrOrBytes>, String)> {
     match file.extension().and_then(|ext| ext.to_str()) {
-        Some(ext) if matches!(ext, "css" | "html") => Some((
+        Some(ext) if matches!(ext, "css" | "html" | "txt") => Some((
             fs::read_to_string(file).ok().map(StrOrBytes::Str),
             format!("text/{ext}"),
         )),
