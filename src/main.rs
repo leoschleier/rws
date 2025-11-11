@@ -151,6 +151,18 @@ fn load_content(file: &path::Path) -> Option<(Option<StrOrBytes>, String)> {
             fs::read(file).ok().map(StrOrBytes::Bytes),
             format!("application/{ext}"),
         )),
+        Some(ext) if matches!(ext, "png") => Some((
+            fs::read(file).ok().map(StrOrBytes::Bytes),
+            format!("image/{ext}"),
+        )),
+        Some("svg") => Some((
+            fs::read(file).ok().map(StrOrBytes::Bytes),
+            "image/svg+xml".to_string(),
+        )),
+        Some("ico") => Some((
+            fs::read(file).ok().map(StrOrBytes::Bytes),
+            "image/vnd.microsoft.icon".to_string(),
+        )),
         _ => None,
     }
 }
