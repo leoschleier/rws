@@ -4,7 +4,7 @@ use std::net::TcpListener;
 
 /// Entry point for running the multithreaded webserver.
 fn main() {
-    let parameters = cli::Parameters::from_env();
+    let parameters = cli::Config::from_env();
 
     println!("Serving static conent from {}", parameters.root);
 

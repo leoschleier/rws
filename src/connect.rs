@@ -1,3 +1,8 @@
+//! Handles TCP connections.
+//!
+//! This module provides functionality for:
+//! - Parsing HTTP requests
+//! - Serving static content from files
 use regex::Regex;
 use std::fs;
 use std::io::{BufReader, prelude::*};
@@ -25,9 +30,7 @@ pub fn handle_connection(mut stream: TcpStream, root: String) {
     };
 
     let re = Regex::new(r"^(GET) (.+) (HTTP/1\.1)$").unwrap();
-
     let captures = re.captures(&request_line);
-
     let request_line_captures = match captures {
         Some(c) => c,
         None => {
@@ -39,84 +42,80 @@ pub fn handle_connection(mut stream: TcpStream, root: String) {
     let request_uri = request_line_captures.get(2).unwrap().as_str();
     println!("Request URI: {}", request_uri);
 
-    let uri_path = path::Path::new(request_uri);
-    let uri_resolved = resolve_uri(uri_path, &root);
-    let file = path::Path::new(&uri_resolved);
-    println!("Resolved uri: {:?}", file);
+    let file_pb = resolve_uri(&root, request_uri);
+    let file_path = file_pb.as_path();
+    println!("Resolved uri: {:?}", file_path);
 
-    let maybe_content = load_content(file);
-
-    let (status_line, content_wrapper, content_type) =
-        if let Some((Some(c), ctype)) = maybe_content {
-            ("HTTP/1.1 200 OK", c, ctype)
+    let try_content = load_content(file_path);
+    let (status_line, content, content_type) =
+        if let Ok((content, content_type)) = try_content {
+            ("HTTP/1.1 200 OK", content, content_type)
         } else {
-            println!("Error occurred when reading file {:?}", file);
+            eprintln!("Error occurred when reading file {:?}", file_path);
+            eprintln!("{}", try_content.unwrap_err());
             let f = format!("{root}/{ERROR_404_NOT_FOUND_HTML}");
             (
                 "HTTP/1.1 404 NOT FOUND",
-                StrOrBytes::Str(
-                    fs::read_to_string(f).unwrap_or("".to_string()),
-                ),
-                String::from("text/html"),
+                fs::read(f).unwrap_or("".as_bytes().to_vec()),
+                "text/html".to_string(),
             )
         };
 
-    match content_wrapper {
-        StrOrBytes::Bytes(b) => {
-            send_response(&mut stream, status_line, &content_type, &b)
-        }
-        StrOrBytes::Str(s) => {
-            send_response(&mut stream, status_line, &content_type, s.as_bytes())
-        }
-    };
+    send_response(&mut stream, status_line, &content_type, &content)
 }
 
-fn resolve_uri(uri: &path::Path, root: &str) -> String {
-    let uri_str;
-    let mut extension = "";
-    if uri == path::Path::new("/") {
-        uri_str = ROOT_HTML;
-    } else if uri.extension().is_none() {
-        uri_str = uri.to_str().unwrap_or("");
-        extension = ".html";
+/// Finds file path associated with uri.
+fn resolve_uri(root: &str, uri: &str) -> path::PathBuf {
+    let mut uri_path;
+    if uri == "/" {
+        uri_path = path::Path::new(ROOT_HTML).to_path_buf();
     } else {
-        uri_str = uri.to_str().unwrap_or("");
+        uri_path = path::PathBuf::from(format!(".{uri}"));
     }
 
-    format!("{root}/{uri_str}{extension}")
-}
+    debug_assert!(uri_path.is_relative());
 
-enum StrOrBytes {
-    Str(String),
-    Bytes(Vec<u8>),
-}
-
-fn load_content(file: &path::Path) -> Option<(Option<StrOrBytes>, String)> {
-    match file.extension().and_then(|ext| ext.to_str()) {
-        Some(ext) if matches!(ext, "css" | "html" | "txt") => Some((
-            fs::read_to_string(file).ok().map(StrOrBytes::Str),
-            format!("text/{ext}"),
-        )),
-        Some(ext) if matches!(ext, "json" | "wasm") => Some((
-            fs::read(file).ok().map(StrOrBytes::Bytes),
-            format!("application/{ext}"),
-        )),
-        Some(ext) if matches!(ext, "png") => Some((
-            fs::read(file).ok().map(StrOrBytes::Bytes),
-            format!("image/{ext}"),
-        )),
-        Some("svg") => Some((
-            fs::read(file).ok().map(StrOrBytes::Bytes),
-            "image/svg+xml".to_string(),
-        )),
-        Some("ico") => Some((
-            fs::read(file).ok().map(StrOrBytes::Bytes),
-            "image/vnd.microsoft.icon".to_string(),
-        )),
-        _ => None,
+    if uri_path.extension().is_none() {
+        uri_path.set_extension("html");
     }
+
+    let root_path = path::Path::new(root);
+    root_path.join(uri_path).components().collect()
 }
 
+/// Loads content from file and determines its content type.
+fn load_content(file: &path::Path) -> Result<(Vec<u8>, String), String> {
+    let try_content = fs::read(file);
+    if let Err(e) = try_content {
+        return Err(e.to_string());
+    }
+    let content = try_content.unwrap();
+
+    let content_type = match file.extension().and_then(|ext| ext.to_str()) {
+        Some(ext) if matches!(ext, "css" | "html" | "txt") => {
+            format!("text/{ext}")
+        }
+        Some(ext) if matches!(ext, "json" | "wasm") => {
+            format!("application/{ext}")
+        }
+        Some(ext) if matches!(ext, "png") => format!("image/{ext}"),
+        Some("svg") => "image/svg+xml".to_string(),
+        Some("ico") => "image/vnd.microsoft.icon".to_string(),
+        Some(ext) => return Err(format!("File type '{ext}' not supported")),
+        None => return Err("Couldn't resolve file type".to_string()),
+    };
+
+    Ok((content, content_type))
+}
+
+/// Sends a response on a TCP stream.
+///
+/// # Arguments
+///
+/// * `stream` - TCP stream to send response on
+/// * `status_line` - Status line of the response
+/// * `content_type` - Content type of the response
+/// * `content` - Content of the response
 fn send_response(
     stream: &mut TcpStream,
     status_line: &str,
@@ -132,7 +131,10 @@ fn send_response(
 
     match stream.write_all(header.as_bytes()) {
         Ok(_) => (),
-        Err(e) => eprintln!("Failed to send header: {e}"),
+        Err(e) => {
+            eprintln!("Failed to send header: {e}");
+            return;
+        }
     }
 
     match stream.write_all(content) {

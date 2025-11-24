@@ -1,14 +1,20 @@
+//! Command line interface.
 use dotenv;
 use std::{env, path};
 
-pub struct Parameters {
+/// Web server configuration.
+pub struct Config {
+    /// Address to bind
     pub address: String,
+    /// Port to bind
     pub port: String,
+    /// Root directory to serve content from
     pub root: String,
 }
 
-impl Parameters {
-    pub fn from_env() -> Parameters {
+impl Config {
+    /// Creates a config from environment variables.
+    pub fn from_env() -> Config {
         dotenv::dotenv().ok();
 
         let address =
@@ -22,7 +28,7 @@ impl Parameters {
             panic!("RWS_ROOT must be a valid directory. Got: {}", root);
         }
 
-        Parameters {
+        Config {
             address,
             port,
             root,
