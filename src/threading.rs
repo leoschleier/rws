@@ -3,6 +3,7 @@ use std::{
     sync::{Arc, Mutex, mpsc},
     thread,
 };
+use tracing::{error, info};
 
 /// An orchastrator of worker threads sending jobs to the workers.
 ///
@@ -66,7 +67,7 @@ impl Drop for ThreadPool {
         drop(self.sender.take());
 
         for worker in self.workers.drain(..) {
-            println!("Shutting down worker {}", worker.id);
+            info!(worker.id, "Shutting down worker");
             worker
                 .thread
                 .join()
@@ -95,12 +96,15 @@ impl Worker {
 
                 match message {
                     Ok(job) => {
-                        println!("Worker {id} got a job; executing.");
+                        info!(worker.id = id, "Worker got a job; executing");
 
                         job();
                     }
                     Err(_) => {
-                        println!("Worker {id} disconnected; shutting down.");
+                        error!(
+                            worker.id = id,
+                            "Worker disconnected; shutting down"
+                        );
                         break;
                     }
                 }

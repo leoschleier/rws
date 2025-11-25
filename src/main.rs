@@ -1,14 +1,20 @@
 //! Multithreaded webserver.
 use rws::{cli, connect, threading};
 use std::net::TcpListener;
+use tracing::info;
 
 /// Entry point for running the multithreaded webserver.
 fn main() {
-    let parameters = cli::Config::from_env();
+    tracing_subscriber::fmt::init();
 
-    println!("Serving static conent from {}", parameters.root);
+    let config = cli::Config::from_env();
 
-    let address_port = format!("{}:{}", parameters.address, parameters.port);
+    info!(
+        config.address,
+        config.port, config.root, "Web server started"
+    );
+
+    let address_port = format!("{}:{}", config.address, config.port);
 
     let listener = TcpListener::bind(&address_port);
     let listener = match listener {
@@ -18,8 +24,6 @@ fn main() {
         }
     };
 
-    println!("Listening to {}", address_port);
-
     let pool = threading::ThreadPool::new(4);
 
     // Iterate over connection attempts.
@@ -28,11 +32,11 @@ fn main() {
         let stream = match stream {
             Ok(s) => s,
             Err(e) => {
-                eprintln!("Failed connection attempt: {e}");
+                info!("Failed connection attempt: {e}");
                 continue;
             }
         };
-        let r = parameters.root.clone();
+        let r = config.root.clone();
         pool.execute(|| connect::handle_connection(stream, r));
     }
 }

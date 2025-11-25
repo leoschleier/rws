@@ -8,6 +8,7 @@ use std::fs;
 use std::io::{BufReader, prelude::*};
 use std::net::TcpStream;
 use std::path;
+use tracing::{info, warn};
 
 const ROOT_HTML: &str = "root.html";
 const ERROR_404_NOT_FOUND_HTML: &str = "error/404.html";
@@ -20,11 +21,11 @@ pub fn handle_connection(mut stream: TcpStream, root: String) {
     let request_line = match buf_reader.lines().next() {
         Some(Ok(line)) => line,
         Some(Err(e)) => {
-            eprintln!("Failed to read request line: {e}");
+            warn!("Failed to read request line: {e}");
             return;
         }
         None => {
-            eprintln!("No request line found");
+            warn!("No request line found");
             return;
         }
     };
@@ -34,25 +35,25 @@ pub fn handle_connection(mut stream: TcpStream, root: String) {
     let request_line_captures = match captures {
         Some(c) => c,
         None => {
-            eprintln!("Invalid request line: {request_line}");
+            warn!("Invalid request line: {request_line}");
             return;
         }
     };
 
     let request_uri = request_line_captures.get(2).unwrap().as_str();
-    println!("Request URI: {}", request_uri);
-
     let file_pb = resolve_uri(&root, request_uri);
     let file_path = file_pb.as_path();
-    println!("Resolved uri: {:?}", file_path);
+    info!(uri = request_uri, path = ?file_path, "Resolved request");
 
     let try_content = load_content(file_path);
     let (status_line, content, content_type) =
         if let Ok((content, content_type)) = try_content {
             ("HTTP/1.1 200 OK", content, content_type)
         } else {
-            eprintln!("Error occurred when reading file {:?}", file_path);
-            eprintln!("{}", try_content.unwrap_err());
+            warn!(
+                path=?file_path, error=try_content.unwrap_err(),
+                "Error occurred when reading file"
+            );
             let f = format!("{root}/{ERROR_404_NOT_FOUND_HTML}");
             (
                 "HTTP/1.1 404 NOT FOUND",
@@ -132,13 +133,13 @@ fn send_response(
     match stream.write_all(header.as_bytes()) {
         Ok(_) => (),
         Err(e) => {
-            eprintln!("Failed to send header: {e}");
+            warn!(error = ?e, "Failed to send header");
             return;
         }
     }
 
     match stream.write_all(content) {
         Ok(_) => (),
-        Err(e) => eprintln!("Failed to send content: {e}"),
+        Err(e) => warn!(error = ?e, "Failed to send content"),
     }
 }
