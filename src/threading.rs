@@ -3,7 +3,7 @@ use std::{
     sync::{Arc, Mutex, mpsc},
     thread,
 };
-use tracing::{error, info};
+use tracing::{Level, error, info, span};
 
 /// An orchastrator of worker threads sending jobs to the workers.
 ///
@@ -91,13 +91,15 @@ impl Worker {
     /// * `receiver` - Receiver via which the worker receives new jobs
     pub fn new(id: usize, receiver: Arc<Mutex<mpsc::Receiver<Job>>>) -> Worker {
         let thread = thread::spawn(move || {
+            let span = span!(Level::ERROR, "worker", id);
+            let _guard = span.enter();
             loop {
+                info!("Worker waiting for a job");
                 let message = receiver.lock().unwrap().recv();
 
                 match message {
                     Ok(job) => {
-                        info!(worker.id = id, "Worker got a job; executing");
-
+                        info!("Worker got a job; executing");
                         job();
                     }
                     Err(_) => {
